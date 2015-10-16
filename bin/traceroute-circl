@@ -32,7 +32,7 @@ use LWP::Simple;
 use JSON;
 use Net::DNS;
 
-$| = 1;
+# $| = 1;
 
 my $country = IP::Country::Fast->new();
 my $ris     = Net::Whois::RIS->new();
@@ -80,7 +80,7 @@ if ( defined( $opts->{addoptions} ) ) {
 
 push( @targ, $ip );
 
-open( TRACEROUTE, '-|' ) || exec "traceroute", @targ
+open( TRACEROUTE, '-|' ) || exec "/bin/sh", "-c", 'traceroute "$@"|buffer', "-", @targ
   or die "traceroute command not found";
 
 while (<TRACEROUTE>) {
