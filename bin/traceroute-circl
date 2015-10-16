@@ -25,7 +25,6 @@ use Socket qw(AF_INET AF_INET6 inet_pton inet_ntop);
 use Getopt::Compact;
 
 use Net::Whois::RIS;
-use IP::Country::Fast;
 use Net::Abuse::Utils;
 use Locale::Country;
 use LWP::Simple;
@@ -34,7 +33,20 @@ use Net::DNS;
 
 # $| = 1;
 
-my $country = IP::Country::Fast->new();
+# a CODE ref to lookup a country to an ip address
+my $clookup = do {
+    eval { require IP::Country::DB_File;  IP::Country::DB_File->import };
+    if ($@) {
+        require IP::Country::Fast; IP::Country::Fast->import;
+        my $cc = IP::Country::Fast->new();
+        sub { $cc->inet_atocc(@_) };
+    } else {
+        my $cc = IP::Country::DB_File->new($ENV{IPCC_DB}); # defaults to "./ipcc.db"
+        sub {
+            ($_[0] =~ /:/) ? $cc->inet6_atocc(@_) : $cc->inet_atocc(@_)
+        };
+    }
+};
 my $ris     = Net::Whois::RIS->new();
 my $res     = Net::DNS::Resolver->new();
 
@@ -93,14 +105,14 @@ while (<TRACEROUTE>) {
         my $tip = $`;
         my $lcountry;
         if ( !defined( $opts->{fullcountry} ) ) {
-            $lcountry = $country->inet_atocc($tip);
+            $lcountry = &{$clookup}($tip);
         }
         else {
-            $lcountry = code2country( $country->inet_atocc($tip) );
+            $lcountry = code2country( &{$clookup}($tip) );
         }
         if ( defined( $opts->{geomap} ) ) {
             my $loc =
-              GetCountryLatLng( code2country( $country->inet_atocc($tip) ) );
+              GetCountryLatLng( code2country( &{$clookup}($tip) ) );
             if ( defined($loc) ) {
                 GmapAddLine($loc);
                 GmapAddMarker( $loc, $hop );
